@@ -9,7 +9,6 @@ from coord_convert import CCoordinate
 from matcher import Detector
 from utils import logger, dump_error
 import matplotlib.pyplot as plt
-from mpl_point_clicker import clicker
 import argparse
 
 from osgeo import gdal

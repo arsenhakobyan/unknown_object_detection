@@ -1,0 +1,6 @@
+numpy
+pyproj
+Pillow
+opencv-python
+matplotlib
+gdal
