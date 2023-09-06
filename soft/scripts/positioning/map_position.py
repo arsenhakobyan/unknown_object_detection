@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from PIL import Image, ExifTags
+from PIL import Image, ExifTags, ImageDraw
 import cv2
 import os
 import sys
@@ -134,7 +134,7 @@ class MapPosition(CCoordinate):
         y = event.ydata
         lat, lng = self.pixel2ll(x, y)
         if event.inaxes is not None:
-            print(f'\n{self.count}: You clicked on pixel coordinates: x={int(x)}, y={int(y)}, lat={lat}, lng={lng}\n')
+            print(f'\n{self.count}: You clicked on pixel coordinates: x,y={int(x)}, {int(y)}, lat,lng={lat}, {lng}\n')
 
     def on_scroll(self, event):
         ax = plt.gca()
@@ -164,13 +164,24 @@ class MapPosition(CCoordinate):
 
             cropped_image_dataset, cropped_map_file_name = self.crop_map(
                 d_lat, d_lng, self.max_x, self.max_y)
-
+            
+            print("cropped_map_file_name", cropped_map_file_name)
             map_image = np.array(Image.open(cropped_map_file_name))
 
-            pred = self.matcher.run_detector( resized_d_image, map_image)
+            pred = self.matcher.run_detector(resized_d_image, map_image)
 
             if pred[0]:
                 self.match = pred[1]
+                print(self.match)
+                cropped_map = Image.open(cropped_map_file_name)
+                draw = ImageDraw.Draw(cropped_map)
+
+                line_color = (255, 0, 0)  # Red
+                    
+                for i in range(3):
+                    draw.line([tuple(pred[1][i].astype(int)), tuple(pred[1][i+1].astype(int))], fill=line_color, width=3)
+                cropped_map.show()
+
                 self.cropped_image_dataset = cropped_image_dataset
                 self.cropped_image_gt = self.cropped_image_dataset.GetGeoTransform()
 
@@ -179,7 +190,7 @@ class MapPosition(CCoordinate):
                     self.match, self.corners)
 
                 fig, ax = plt.subplots()
-                ax.imshow(resized_d_image, aspect='equal')
+                ax.imshow(d_image, aspect='equal')
                 plt.axis('off')  # To hide axis values
 
                 # Remove padding and margin
@@ -202,7 +213,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Map and match images with optional scaling.")
     parser.add_argument("--map", required=True, type=str, help="Path to the map image.")
     parser.add_argument("--image", required=True, type=str, help="Path to the image to be matched.")
-    parser.add_argument("--scale", type=int, default=10, help="Scale value used to scale the image before matching. Default is 10.")
+    parser.add_argument("--scale", type=float, default=10, help="Scale value used to scale the image before matching. Default is 10.")
     args = parser.parse_args()
     m = MapPosition(args.map, args.scale)
     m.run_matching(args.image)

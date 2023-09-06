@@ -2,7 +2,7 @@ import numpy as np
 import cv2
 
 class Detector:
-    def __init__(self, num_of_descriptors=0, num_of_octave_layers=5, thresh=0.02, ratio=0.8, expected_num_matches=50):
+    def __init__(self, num_of_descriptors=0, num_of_octave_layers=3, thresh=0.02, ratio=0.8, expected_num_matches=150):
         self.matcher = cv2.FlannBasedMatcher.create()
         self.sift = cv2.SIFT_create(num_of_descriptors, num_of_octave_layers, thresh)
         self.ratio = ratio
@@ -31,10 +31,10 @@ class Detector:
         returning_dst = []
         if homography.size != 0:
             dst = cv2.perspectiveTransform(Detector.imgCorners(hd_image), homography)
-            if Detector.isViableQuad(dst):
-                for i in dst:
-                    returning_dst.append(i[0])
-                return (True, np.array(returning_dst))
+            #if Detector.isViableQuad(dst):
+            for i in dst:
+                returning_dst.append(i[0])
+            return (True, np.array(returning_dst))
         return (False, None)
 
     @staticmethod
@@ -61,9 +61,9 @@ class Detector:
         for i in range(4):
             angles.append(Detector.positiveAngle(slopes[i] - slopes[(i+3)%4]))
 
-        for i in angles:
-            if 30 > i or 150 < i:
-                return False
+        #for i in angles:
+        #    if 30 > i or 150 < i:
+        #        return False
         return True
 
     @staticmethod
