@@ -10,6 +10,8 @@ from matcher import Detector
 from utils import logger, dump_error
 import matplotlib.pyplot as plt
 import argparse
+import math
+import struct
 
 from osgeo import gdal
 
@@ -128,13 +130,29 @@ class MapPosition(CCoordinate):
             longitude *= -1
         return latitude, longitude
 
+
+    def get_elevation(self, lat, lng):
+        evf = "../Armenia_Elevation/N" + str(math.floor(lat)) + "E0" + str(math.floor(lng)) + ".hgt";
+        with open(evf, 'rb') as hgt:
+            size = 1201
+            row = int((lat - int(lat)) * (size - 1))
+            col = int((lng - int(lng)) * (size - 1))
+
+            pos = ((size - row) * size + col) * 2  # 2 bytes per data point
+            hgt.seek(pos)
+            elev = struct.unpack('>h', hgt.read(2))[0]
+            return elev
+
+
     def on_click(self, event):
         self.count += 1
         x = event.xdata
         y = event.ydata
         lat, lng = self.pixel2ll(x, y)
+        alt = self.get_elevation(lat, lng)
+
         if event.inaxes is not None:
-            print(f'\n{self.count}: You clicked on pixel coordinates: x,y={int(x)}, {int(y)}, lat,lng={lat}, {lng}\n')
+            print(f'\n{self.count}: You clicked on pixel coordinates: x,y={int(x)}, {int(y)}, lat,lng,alt: {lat} {lng} {alt}\n')
 
     def on_scroll(self, event):
         ax = plt.gca()
@@ -151,7 +169,7 @@ class MapPosition(CCoordinate):
         try:
             d_image = Image.open(filename)
             h, w = d_image.size
-            self.max_x, self.max_y = h // self.scale, w // self.scale
+            self.max_x, self.max_y = (int)(h // self.scale), (int)(w // self.scale)
             self.corners = np.float32(
                 [[0, 0], [self.max_x, 0], [self.max_x, self.max_y], [0, self.max_y]])
 
