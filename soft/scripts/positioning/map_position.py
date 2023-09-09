@@ -12,6 +12,9 @@ import matplotlib.pyplot as plt
 import argparse
 import math
 import struct
+import requests
+from bs4 import BeautifulSoup
+import pyproj
 
 from osgeo import gdal
 
@@ -28,6 +31,10 @@ class MapPosition(CCoordinate):
         self.matcher = Detector()
         self.scale = scale
         self.count = 0
+        self.wgs84 = pyproj.CRS("EPSG:4326")
+        self.sk42_4284 = pyproj.CRS("EPSG:4284")
+        self.sk42_28412 = pyproj.CRS("EPSG:28412")
+        self.pulkovo = pyproj.CRS("Pulkovo 1942")
 
     def cropped_map2d_pixel(self, x, y):
         xy = np.array([x, y, 1])
@@ -144,6 +151,25 @@ class MapPosition(CCoordinate):
             return elev
 
 
+    def get_conversion(self, lat, lon):
+        base_url = "https://sk42.org/?direction=toSK42"
+        full_url = f"{base_url}&convstr={lat}%2C+{lon}"
+        response = requests.get(full_url)
+
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, 'html.parser')
+            res = soup.get_text(strip=True)
+            start_pos = res.find("SK-42 (XY)")
+            end_pos = res.find("Original coordinates")
+            res = res[start_pos:end_pos].strip()
+            start_pos1 = res.find("X:")
+
+            sk42 = res[start_pos1:end_pos].strip()
+            sk42 = sk42.replace("Y:", "\tY:")
+            return "SK42: " + sk42
+        else:
+            return "Response Status is not OK"
+
     def on_click(self, event):
         self.count += 1
         x = event.xdata
@@ -152,7 +178,20 @@ class MapPosition(CCoordinate):
         alt = self.get_elevation(lat, lng)
 
         if event.inaxes is not None:
-            print(f'\n{self.count}: You clicked on pixel coordinates: x,y={int(x)}, {int(y)}, lat,lng,alt: {lat} {lng} {alt}\n')
+            print(f'\n{self.count}: You clicked on pixel coordinates: x,y={int(x)}, {int(y)}\n')
+            print("WGS84 Latitude Longitude Altitude: {}, {}, {}".format(lat, lng, alt))
+
+            transformer_epsg4284 = pyproj.Transformer.from_crs(self.wgs84, self.sk42_4284)
+            transformer_epsg28412 = pyproj.Transformer.from_crs(self.wgs84, self.sk42_28412)
+            transformer_pulkovo = pyproj.Transformer.from_crs(self.wgs84, self.pulkovo)
+
+            print(f"SK42.org\t\t ", self.get_conversion(lat, lng))
+            lat_sk42, lon_sk42 = transformer_epsg4284.transform(lat, lng)
+            print(f"SK42 CRS: EPSG 4284\t Latitude: {lat_sk42}, Longitude: {lon_sk42}")
+            lat_sk42, lon_sk42 = transformer_epsg28412.transform(lat, lng)
+            print(f"SK42 CRS: EPSG:28412\t  Latitude: {lat_sk42}, Longitude: {lon_sk42}")
+            lat_sk42, lon_sk42 = transformer_pulkovo.transform(lat, lng)
+            print(f"SK42 CRS: Pulkovo 1942\t  Latitude: {lat_sk42}, Longitude: {lon_sk42}")
 
     def on_scroll(self, event):
         ax = plt.gca()
