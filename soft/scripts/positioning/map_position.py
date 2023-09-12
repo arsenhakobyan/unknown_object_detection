@@ -5,7 +5,6 @@ import cv2
 import os
 import sys
 import numpy as np
-from coord_convert import CCoordinate
 from matcher import Detector
 from utils import logger, dump_error
 import matplotlib.pyplot as plt
@@ -18,17 +17,17 @@ import pyproj
 
 from osgeo import gdal
 
-class MapPosition(CCoordinate):
+class MapPosition:
 
-    def __init__(self, map_filename, scale=5):
+    def __init__(self, map_filename, scale=5, m_octave_layers=6, m_expected_num_matches=200):
         super(MapPosition, self).__init__()
         
         self.map_filename = map_filename
         self.ds = gdal.Open(map_filename)
-
+        
         self.width = self.ds.RasterXSize
         self.height = self.ds.RasterYSize
-        self.matcher = Detector()
+        self.matcher = Detector(num_of_octave_layers=m_octave_layers, expected_num_matches=m_expected_num_matches)
         self.scale = scale
         self.count = 0
         self.wgs84 = pyproj.CRS("EPSG:4326")
@@ -57,42 +56,31 @@ class MapPosition(CCoordinate):
         new_xy //= new_xy[2]
         return new_xy[0], new_xy[1]
 
-    def utm2pixel(self, gt, m_x, m_y):
-        xoffset, px_w, rot1, yoffset, rot2, px_h = gt
-
-        m_x -= xoffset
-        m_y -= yoffset
-
-        A = np.array([[px_w, rot1], [rot2, px_h]])
-        b = np.array([m_x, m_y])
-
-        pixel_xy = np.linalg.solve(A, b)
-
-        pixel_x, pixel_y = int(pixel_xy[0]), int(pixel_xy[1])
-        return pixel_x, pixel_y
-
-    def pixel2utm(self, gt, pixel_x, pixel_y):
-        xoffset, px_w, rot1, yoffset, rot2, px_h = gt
-
-        m_x = px_w * pixel_x + rot1 * pixel_y + xoffset
-        m_y = rot2 * pixel_x + px_h * pixel_y + yoffset
-
-        # shift to the center of the pixel
-        m_x += px_w / 2.0
-        m_y += px_h / 2.0
-
-        return m_x, m_y
-
     def pixel2ll(self, x, y):
         pixel_x, pixel_y = self.d_pixel2cropped_map(x, y)
-        m_x, m_y = self.pixel2utm(self.cropped_image_gt, pixel_x, pixel_y)
-        lat, lng = self.utm2ll(m_x, m_y)
+        xoffset, px_w, rot1, yoffset, rot2, px_h = self.cropped_image_gt
+
+        lat = px_h * pixel_y + rot1 * pixel_x + yoffset
+        lng = rot2 * pixel_y + px_w * pixel_x + xoffset
+
+        # shift to the center of the pixel
+        lat += px_h / 2.0
+        lng += px_w / 2.0
+
         return lat, lng
 
     def ll2pixel(self, lat, lng):
-        m_x, m_y = self.ll2utm(lat, lng)
-        gt = self.ds.GetGeoTransform()
-        pixel_x, pixel_y = self.utm2pixel(gt, m_x, m_y)
+        xoffset, px_w, rot1, yoffset, rot2, px_h = self.ds.GetGeoTransform()
+
+        lat -= yoffset
+        lng -= xoffset
+
+        A = np.array([[px_h, rot1], [rot2, px_w]])
+        b = np.array([lat, lng])
+
+        pixel_xy = np.linalg.solve(A, b)
+
+        pixel_y, pixel_x = int(pixel_xy[0]), int(pixel_xy[1])
         return pixel_x, pixel_y
 
     def crop_map(self, lat, lng, x_size, y_size):
@@ -139,7 +127,7 @@ class MapPosition(CCoordinate):
 
 
     def get_elevation(self, lat, lng):
-        evf = "../Armenia_Elevation/N" + str(math.floor(lat)) + "E0" + str(math.floor(lng)) + ".hgt";
+        evf = "/home/havq/Armenia_Elevation/N" + str(math.floor(lat)) + "E0" + str(math.floor(lng)) + ".hgt";
         with open(evf, 'rb') as hgt:
             size = 1201
             row = int((lat - int(lat)) * (size - 1))
@@ -180,14 +168,13 @@ class MapPosition(CCoordinate):
         if event.inaxes is not None:
             print(f'\n{self.count}: You clicked on pixel coordinates: x,y={int(x)}, {int(y)}\n')
             print("WGS84 Latitude Longitude Altitude: {}, {}, {}".format(lat, lng, alt))
+            print(f"SK42.org\t\t ", self.get_conversion(lat, lng))
 
             transformer_epsg4284 = pyproj.Transformer.from_crs(self.wgs84, self.sk42_4284)
             transformer_epsg28412 = pyproj.Transformer.from_crs(self.wgs84, self.sk42_28412)
             transformer_pulkovo = pyproj.Transformer.from_crs(self.wgs84, self.pulkovo)
-
-            print(f"SK42.org\t\t ", self.get_conversion(lat, lng))
             lat_sk42, lon_sk42 = transformer_epsg4284.transform(lat, lng)
-            print(f"SK42 CRS: EPSG 4284\t Latitude: {lat_sk42}, Longitude: {lon_sk42}")
+            print(f"SK42 CRS: EPSG 4284\t  Latitude: {lat_sk42}, Longitude: {lon_sk42}")
             lat_sk42, lon_sk42 = transformer_epsg28412.transform(lat, lng)
             print(f"SK42 CRS: EPSG:28412\t  Latitude: {lat_sk42}, Longitude: {lon_sk42}")
             lat_sk42, lon_sk42 = transformer_pulkovo.transform(lat, lng)
@@ -217,7 +204,6 @@ class MapPosition(CCoordinate):
             d_lat, d_lng = self.get_latlng_from_exif(
                 d_image._getexif())
 
-            self.update_ref(d_lat, d_lng, 0)
 
             cropped_image_dataset, cropped_map_file_name = self.crop_map(
                 d_lat, d_lng, self.max_x, self.max_y)
@@ -229,7 +215,6 @@ class MapPosition(CCoordinate):
 
             if pred[0]:
                 self.match = pred[1]
-                print(self.match)
                 cropped_map = Image.open(cropped_map_file_name)
                 draw = ImageDraw.Draw(cropped_map)
 
@@ -237,7 +222,7 @@ class MapPosition(CCoordinate):
                     
                 for i in range(3):
                     draw.line([tuple(pred[1][i].astype(int)), tuple(pred[1][i+1].astype(int))], fill=line_color, width=3)
-                cropped_map.show()
+                plt.imshow(cropped_map)
 
                 self.cropped_image_dataset = cropped_image_dataset
                 self.cropped_image_gt = self.cropped_image_dataset.GetGeoTransform()
@@ -268,9 +253,12 @@ class MapPosition(CCoordinate):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Map and match images with optional scaling.")
-    parser.add_argument("--map", required=True, type=str, help="Path to the map image.")
     parser.add_argument("--image", required=True, type=str, help="Path to the image to be matched.")
-    parser.add_argument("--scale", type=float, default=10, help="Scale value used to scale the image before matching. Default is 10.")
+    parser.add_argument("--map", default="/home/havq/lernapat_map/map.tif", type=str, help="Path to the map image.")
+    parser.add_argument("--scale", type=float, default=2.941, help="Scale value used to scale the image before matching. Default is 2.941.")
+    parser.add_argument("--octave-layers", "-ol",  type=int, default=6, help="Number of SIFT octave layers. Default is 6.")
+    parser.add_argument("--number-matches", "-nm",  type=int, default=200, help="Number of expected matches. Default is 200.")
+
     args = parser.parse_args()
-    m = MapPosition(args.map, args.scale)
+    m = MapPosition(args.map, args.scale, args.octave_layers, args.number_matches)
     m.run_matching(args.image)
