@@ -125,7 +125,7 @@ class MapPosition:
 
 
     def get_elevation(self, lat, lng):
-        evf = "/home/havq/Armenia_Elevation/N" + str(math.floor(lat)) + "E0" + str(math.floor(lng)) + ".hgt";
+        evf = "./Armenia_Elevation/N" + str(math.floor(lat)) + "E0" + str(math.floor(lng)) + ".hgt";
         with open(evf, 'rb') as hgt:
             size = 1201
             row = int((lat - int(lat)) * (size - 1))
@@ -247,8 +247,8 @@ class MapPosition:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Map and match images with optional scaling.")
-    parser.add_argument("--image", required=True, type=str, help="Path to the image to be matched.")
-    parser.add_argument("--map", default="/home/havq/lernapat_map/map.tif", type=str, help="Path to the map image.")
+    parser.add_argument("--image", "-i", required=True, type=str, help="Path to the image to be matched.")
+    parser.add_argument("--map", default="lernapat_map/map.tif", type=str, help="Path to the map image.")
     parser.add_argument("--scale", type=float, default=2.941, help="Scale value used to scale the image before matching. Default is 2.941.")
     parser.add_argument("--octave-layers", "-ol",  type=int, default=6, help="Number of SIFT octave layers. Default is 6.")
     parser.add_argument("--number-matches", "-nm",  type=int, default=200, help="Number of expected matches. Default is 200.")
