@@ -31,9 +31,7 @@ class MapPosition:
         self.scale = scale
         self.count = 0
         self.wgs84 = pyproj.CRS("EPSG:4326")
-        self.sk42_4284 = pyproj.CRS("EPSG:4284")
-        self.sk42_28412 = pyproj.CRS("EPSG:28412")
-        self.pulkovo = pyproj.CRS("Pulkovo 1942")
+        self.sk42_28408 = pyproj.CRS("EPSG:28408")
 
     def cropped_map2d_pixel(self, x, y):
         xy = np.array([x, y, 1])
@@ -170,15 +168,11 @@ class MapPosition:
             print("WGS84 Latitude Longitude Altitude: {}, {}, {}".format(lat, lng, alt))
             print(f"SK42.org\t\t ", self.get_conversion(lat, lng))
 
-            transformer_epsg4284 = pyproj.Transformer.from_crs(self.wgs84, self.sk42_4284)
-            transformer_epsg28412 = pyproj.Transformer.from_crs(self.wgs84, self.sk42_28412)
-            transformer_pulkovo = pyproj.Transformer.from_crs(self.wgs84, self.pulkovo)
-            lat_sk42, lon_sk42 = transformer_epsg4284.transform(lat, lng)
-            print(f"SK42 CRS: EPSG 4284\t  Latitude: {lat_sk42}, Longitude: {lon_sk42}")
-            lat_sk42, lon_sk42 = transformer_epsg28412.transform(lat, lng)
-            print(f"SK42 CRS: EPSG:28412\t  Latitude: {lat_sk42}, Longitude: {lon_sk42}")
-            lat_sk42, lon_sk42 = transformer_pulkovo.transform(lat, lng)
-            print(f"SK42 CRS: Pulkovo 1942\t  Latitude: {lat_sk42}, Longitude: {lon_sk42}")
+            transformer_epsg28408 = pyproj.Transformer.from_crs(self.wgs84, self.sk42_28408)
+
+            lat_sk42, lon_sk42 = transformer_epsg28408.transform(lat, lng)
+            print(f"SK42 CRS: EPSG:28408\t  X: {lat_sk42}, Y: {lon_sk42}")
+
 
     def on_scroll(self, event):
         ax = plt.gca()
